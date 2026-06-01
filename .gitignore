@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Ambientes virtuais
+venv/
+.venv/
+env/
+.env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb~
+
+# Logs
+*.log
+streamlit.log
+streamlit_run.log
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Kaggle credentials (segurança)
+kaggle.json
+.kaggle/
+
+# Cache do SHAP e scikit-learn
+.joblib_cache/
+__joblib_cache/
+
+# Arquivos temporários
+*.tmp
+*.bak
