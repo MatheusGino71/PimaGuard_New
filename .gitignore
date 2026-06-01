@@ -39,6 +39,11 @@ desktop.ini
 kaggle.json
 .kaggle/
 
+# Modelos treinados (binários — versão-dependentes, gerados em runtime)
+models/*.pkl
+models/*.keras
+models/*.h5
+
 # Cache do SHAP e scikit-learn
 .joblib_cache/
 __joblib_cache/

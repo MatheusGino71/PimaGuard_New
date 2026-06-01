@@ -335,7 +335,7 @@ AXIS_STYLE = dict(gridcolor='#F3F4F6', linecolor='#E2E8F0')
 
 
 # ── System initialization ─────────────────────────────────────────────────────
-@st.cache_resource(show_spinner="Inicializando PimaGuard — treinando modelos (primeira execucao)...")
+@st.cache_resource(show_spinner="Inicializando PimaGuard — treinando modelos, aguarde (~30s na primeira execucao)...")
 def init_system():
     from src.data_loader import load_data
     from src.preprocessing import preprocess, split_data, get_clean_df
