@@ -208,6 +208,22 @@ footer { display: none; }
 }
 .sidebar-meta p { font-size: 0.78rem !important; margin: 2px 0; }
 
+/* ── Plotly chart text — forcar legibilidade ── */
+.js-plotly-plot .xtick text,
+.js-plotly-plot .ytick text,
+.js-plotly-plot .g-xtitle text,
+.js-plotly-plot .g-ytitle text,
+.js-plotly-plot .legendtext,
+.js-plotly-plot .annotation-text tspan {
+    fill: #1E293B !important;
+    font-size: 12px !important;
+}
+.js-plotly-plot .gtitle { fill: #0F172A !important; }
+
+/* Tabelas HTML customizadas */
+.metrics-table th { color: #1E293B !important; }
+.metrics-table td { color: #1E293B !important; }
+
 /* ── Override Streamlit exception/error pink boxes ── */
 .stException, [data-testid="stException"] {
     background: #FFFBEB !important;
@@ -328,7 +344,7 @@ COLORS = {
 
 PLOT_TEMPLATE = dict(
     paper_bgcolor='white', plot_bgcolor='white',
-    font=dict(family='Inter', color='#374151', size=12),
+    font=dict(family='Inter', color='#1E293B', size=12),
 )
 
 AXIS_STYLE = dict(gridcolor='#F3F4F6', linecolor='#E2E8F0')
@@ -410,7 +426,7 @@ def risk_gauge(probability: float) -> go.Figure:
                 tickvals=[0, 30, 60, 100],
                 ticktext=['0%', '30%', '60%', '100%'],
                 tickwidth=1, tickcolor='#CBD5E1',
-                tickfont=dict(size=11),
+                tickfont=dict(color='#1E293B', size=11),
             ),
             bar=dict(color=bar_color, thickness=0.28),
             bgcolor='white',
@@ -455,19 +471,22 @@ def shap_chart(shap_values: np.ndarray, feature_names: list) -> go.Figure:
     fig.add_vline(x=0, line_width=1.5, line_color='#374151')
 
     x_range = max(abs(df['shap'].min()), abs(df['shap'].max())) * 1.5
+    tick_font = dict(color='#1E293B', size=12)
     fig.update_layout(
         **PLOT_TEMPLATE,
         height=320,
         xaxis=dict(range=[-x_range, x_range], title='Impacto no Risco (valor SHAP)',
+                   title_font=dict(color='#1E293B', size=12),
+                   tickfont=tick_font,
                    gridcolor='#F3F4F6', linecolor='#E2E8F0', zeroline=False),
-        yaxis=dict(gridcolor='#F3F4F6', linecolor='#E2E8F0'),
+        yaxis=dict(tickfont=tick_font, gridcolor='#F3F4F6', linecolor='#E2E8F0'),
         margin=dict(l=20, r=80, t=35, b=20),
         annotations=[
             dict(x=x_range * 0.7, y=1.04, xref='x', yref='paper',
-                 text='Aumenta risco', font=dict(color=COLORS['red'], size=11),
+                 text='<b>Aumenta risco</b>', font=dict(color=COLORS['red'], size=12),
                  showarrow=False, align='center'),
             dict(x=-x_range * 0.7, y=1.04, xref='x', yref='paper',
-                 text='Reduz risco', font=dict(color=COLORS['blue'], size=11),
+                 text='<b>Reduz risco</b>', font=dict(color=COLORS['blue'], size=12),
                  showarrow=False, align='center'),
         ],
     )
@@ -498,7 +517,7 @@ def pr_chart(results: dict) -> go.Figure:
         xaxis=dict(title='Recall (Sensibilidade)', range=[0, 1],
                    gridcolor='#F3F4F6', linecolor='#E2E8F0'),
         yaxis=dict(title='Precisao', range=[0, 1.02],
-                   gridcolor='#F3F4F6', linecolor='#E2E8F0'),
+                   gridcolor='#F3F4F6', linecolor='#E2E8F0', tickfont=dict(color='#1E293B', size=11)),
         legend=dict(x=0.01, y=0.05, bgcolor='rgba(255,255,255,0.9)',
                     bordercolor='#E2E8F0', borderwidth=1, font=dict(size=11)),
         margin=dict(l=20, r=20, t=20, b=20),
@@ -528,9 +547,9 @@ def calibration_chart(results: dict) -> go.Figure:
     fig.update_layout(
         **PLOT_TEMPLATE, height=420,
         xaxis=dict(title='Probabilidade media prevista', range=[0, 1],
-                   gridcolor='#F3F4F6', linecolor='#E2E8F0'),
+                   gridcolor='#F3F4F6', linecolor='#E2E8F0', tickfont=dict(color='#1E293B', size=11)),
         yaxis=dict(title='Fracao de positivos reais', range=[0, 1.02],
-                   gridcolor='#F3F4F6', linecolor='#E2E8F0'),
+                   gridcolor='#F3F4F6', linecolor='#E2E8F0', tickfont=dict(color='#1E293B', size=11)),
         legend=dict(x=0.01, y=0.95, bgcolor='rgba(255,255,255,0.9)',
                     bordercolor='#E2E8F0', borderwidth=1, font=dict(size=11)),
         margin=dict(l=20, r=20, t=20, b=20),
@@ -559,9 +578,9 @@ def roc_chart(results: dict) -> go.Figure:
         **PLOT_TEMPLATE,
         height=420,
         xaxis=dict(title='Taxa de Falso Positivo', range=[0, 1],
-                   gridcolor='#F3F4F6', linecolor='#E2E8F0'),
+                   gridcolor='#F3F4F6', linecolor='#E2E8F0', tickfont=dict(color='#1E293B', size=11)),
         yaxis=dict(title='Taxa de Verdadeiro Positivo', range=[0, 1.02],
-                   gridcolor='#F3F4F6', linecolor='#E2E8F0'),
+                   gridcolor='#F3F4F6', linecolor='#E2E8F0', tickfont=dict(color='#1E293B', size=11)),
         legend=dict(
             x=0.52, y=0.05, bgcolor='rgba(255,255,255,0.9)',
             bordercolor='#E2E8F0', borderwidth=1,
@@ -587,8 +606,8 @@ def confusion_matrix_chart(cm: np.ndarray, model_name: str) -> go.Figure:
     fig.update_layout(
         **PLOT_TEMPLATE,
         height=300,
-        xaxis=dict(title='Previsto', side='bottom', gridcolor='rgba(0,0,0,0)', linecolor='rgba(0,0,0,0)'),
-        yaxis=dict(title='Real', gridcolor='rgba(0,0,0,0)', linecolor='rgba(0,0,0,0)', autorange='reversed'),
+        xaxis=dict(title='Previsto', side='bottom', gridcolor='rgba(0,0,0,0)', tickfont=dict(color='#1E293B', size=11), linecolor='rgba(0,0,0,0)'),
+        yaxis=dict(title='Real', gridcolor='rgba(0,0,0,0)', tickfont=dict(color='#1E293B', size=11), linecolor='rgba(0,0,0,0)', autorange='reversed'),
         margin=dict(l=20, r=20, t=20, b=20),
     )
     return fig
@@ -637,7 +656,7 @@ def population_comparison_chart(patient_values: list, df_clean: pd.DataFrame) ->
             radialaxis=dict(visible=True, range=[0, 1], showticklabels=False,
                             gridcolor='#E2E8F0', linecolor='#E2E8F0'),
             angularaxis=dict(gridcolor='#E2E8F0', linecolor='#E2E8F0',
-                             tickfont=dict(size=11)),
+                             tickfont=dict(color='#1E293B', size=11)),
         ),
         legend=dict(x=0.5, y=-0.15, xanchor='center', orientation='h',
                     font=dict(size=11)),
@@ -675,7 +694,7 @@ def metrics_comparison_chart(results: dict) -> go.Figure:
             gridcolor='#F3F4F6', linecolor='#E2E8F0',
         ),
         yaxis=dict(range=[0, 1.05], title='Valor da Metrica',
-                   gridcolor='#F3F4F6', linecolor='#E2E8F0'),
+                   gridcolor='#F3F4F6', linecolor='#E2E8F0', tickfont=dict(color='#1E293B', size=11)),
         legend=dict(x=0.5, y=1.08, xanchor='center', orientation='h', font=dict(size=11)),
         barmode='group',
         margin=dict(l=20, r=20, t=20, b=20),
@@ -1131,8 +1150,8 @@ def page_eda(sd: dict):
                 font=dict(family='Inter', color='#374151', size=12),
                 height=360, barmode='overlay',
                 xaxis=dict(title=f"{FEATURE_LABELS[feat_sel]}{unit}",
-                           gridcolor='#F3F4F6', linecolor='#E2E8F0'),
-                yaxis=dict(title='Frequencia', gridcolor='#F3F4F6', linecolor='#E2E8F0'),
+                           gridcolor='#F3F4F6', linecolor='#E2E8F0', tickfont=dict(color='#1E293B', size=11)),
+                yaxis=dict(title='Frequencia', gridcolor='#F3F4F6', linecolor='#E2E8F0', tickfont=dict(color='#1E293B', size=11)),
                 legend=dict(x=0.75, y=0.95, font=dict(size=11)),
                 margin=dict(l=20, r=20, t=20, b=20),
             )
@@ -1184,8 +1203,8 @@ def page_eda(sd: dict):
                 paper_bgcolor='white', plot_bgcolor='white',
                 font=dict(family='Inter', color='#374151', size=12),
                 height=480,
-                xaxis=dict(tickangle=-35, gridcolor='rgba(0,0,0,0)', linecolor='rgba(0,0,0,0)'),
-                yaxis=dict(gridcolor='rgba(0,0,0,0)', linecolor='rgba(0,0,0,0)'),
+                xaxis=dict(tickangle=-35, gridcolor='rgba(0,0,0,0)', tickfont=dict(color='#1E293B', size=11), linecolor='rgba(0,0,0,0)'),
+                yaxis=dict(gridcolor='rgba(0,0,0,0)', tickfont=dict(color='#1E293B', size=11), linecolor='rgba(0,0,0,0)'),
                 margin=dict(l=20, r=20, t=20, b=80),
             )
             st.plotly_chart(fig_corr, use_container_width=True, config={'displayModeBar': False})
@@ -1226,8 +1245,8 @@ def page_eda(sd: dict):
                 paper_bgcolor='white', plot_bgcolor='white',
                 font=dict(family='Inter', color='#374151', size=12),
                 height=420, boxmode='group',
-                xaxis=dict(title='Variavel', gridcolor='#F3F4F6', linecolor='#E2E8F0'),
-                yaxis=dict(title='Valor normalizado [0-1]', gridcolor='#F3F4F6', linecolor='#E2E8F0'),
+                xaxis=dict(title='Variavel', gridcolor='#F3F4F6', linecolor='#E2E8F0', tickfont=dict(color='#1E293B', size=11)),
+                yaxis=dict(title='Valor normalizado [0-1]', gridcolor='#F3F4F6', linecolor='#E2E8F0', tickfont=dict(color='#1E293B', size=11)),
                 legend=dict(x=0.85, y=0.98, font=dict(size=11)),
                 margin=dict(l=20, r=20, t=20, b=20),
             )
@@ -1260,8 +1279,8 @@ def page_eda(sd: dict):
                 paper_bgcolor='white', plot_bgcolor='white',
                 font=dict(family='Inter', color='#374151', size=12),
                 height=420,
-                xaxis=dict(title=f"{FEATURE_LABELS[fx]}{ux}", gridcolor='#F3F4F6', linecolor='#E2E8F0'),
-                yaxis=dict(title=f"{FEATURE_LABELS[fy]}{uy}", gridcolor='#F3F4F6', linecolor='#E2E8F0'),
+                xaxis=dict(title=f"{FEATURE_LABELS[fx]}{ux}", gridcolor='#F3F4F6', linecolor='#E2E8F0', tickfont=dict(color='#1E293B', size=11)),
+                yaxis=dict(title=f"{FEATURE_LABELS[fy]}{uy}", gridcolor='#F3F4F6', linecolor='#E2E8F0', tickfont=dict(color='#1E293B', size=11)),
                 legend=dict(x=0.75, y=0.98, font=dict(size=11)),
                 margin=dict(l=20, r=20, t=20, b=20),
             )
@@ -1372,7 +1391,7 @@ def page_models(sd: dict):
                     **PLOT_TEMPLATE, height=380,
                     yaxis=dict(title='AUC (5-Fold CV)', range=[0.5, 1.0],
                                gridcolor='#F3F4F6', linecolor='#E2E8F0'),
-                    xaxis=dict(gridcolor='#F3F4F6', linecolor='#E2E8F0'),
+                    xaxis=dict(gridcolor='#F3F4F6', linecolor='#E2E8F0', tickfont=dict(color='#1E293B', size=11)),
                     margin=dict(l=20, r=20, t=20, b=20),
                     showlegend=False,
                 )
@@ -1423,7 +1442,7 @@ def page_models(sd: dict):
                 fig_fi.update_layout(
                     **PLOT_TEMPLATE, height=300,
                     xaxis=dict(title='Importancia (Gini)', gridcolor='#F3F4F6', linecolor='#E2E8F0'),
-                    yaxis=dict(gridcolor='#F3F4F6', linecolor='#E2E8F0'),
+                    yaxis=dict(gridcolor='#F3F4F6', linecolor='#E2E8F0', tickfont=dict(color='#1E293B', size=11)),
                     margin=dict(l=20, r=20, t=20, b=20),
                 )
                 st.plotly_chart(fig_fi, use_container_width=True, config={'displayModeBar': False})
@@ -1481,7 +1500,7 @@ def page_ethics(sd: dict):
                 fig.update_layout(
                     **PLOT_TEMPLATE, height=310,
                     xaxis=dict(title='Importancia Relativa (%)', gridcolor='#F3F4F6', linecolor='#E2E8F0'),
-                    yaxis=dict(gridcolor='#F3F4F6', linecolor='#E2E8F0'),
+                    yaxis=dict(gridcolor='#F3F4F6', linecolor='#E2E8F0', tickfont=dict(color='#1E293B', size=11)),
                     margin=dict(l=20, r=80, t=20, b=20),
                 )
                 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
@@ -1602,7 +1621,7 @@ def page_ethics(sd: dict):
             ))
             fig_bmi.update_layout(
                 **PLOT_TEMPLATE, height=300,
-                yaxis=dict(title='Acuracia', range=[0.5, 1.0], gridcolor='#F3F4F6', linecolor='#E2E8F0'),
+                yaxis=dict(title='Acuracia', range=[0.5, 1.0], gridcolor='#F3F4F6', linecolor='#E2E8F0', tickfont=dict(color='#1E293B', size=11)),
                 yaxis2=dict(title='Prevalencia', overlaying='y', side='right', range=[0, 1]),
                 legend=dict(x=0.5, y=1.08, xanchor='center', orientation='h'),
                 margin=dict(l=20, r=60, t=20, b=20),
