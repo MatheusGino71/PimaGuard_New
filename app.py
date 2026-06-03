@@ -60,13 +60,23 @@ footer { display: none; }
     color: #8DA2BC !important;
     font-size: 0.875rem;
     font-weight: 500;
-    transition: all 0.15s;
+    transition: background 0.15s, color 0.15s;
     cursor: pointer;
     border: 1px solid transparent;
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
 }
 .stRadio > div > label:hover {
-    background: rgba(255,255,255,0.06);
-    color: #CBD5E1 !important;
+    background: rgba(255,255,255,0.07) !important;
+    color: #E2E8F0 !important;
+}
+/* Item ativo — funciona via :has() em browsers modernos */
+.stRadio > div > label:has(input[type="radio"]:checked) {
+    background: rgba(13,148,136,0.22) !important;
+    color: #FFFFFF !important;
+    border-color: rgba(13,148,136,0.45) !important;
+    font-weight: 600 !important;
 }
 [data-baseweb="radio"] > div:first-child { display: none !important; }
 
@@ -268,22 +278,25 @@ div[role="alert"].stAlert {
 .feature-card {
     background: #F8FAFC;
     border: 1px solid #E2E8F0;
-    border-radius: 10px;
-    padding: 0.7rem 0.9rem 0.4rem;
-    margin-bottom: 0.6rem;
+    border-radius: 8px;
+    padding: 0.45rem 0.75rem 0.25rem;
+    margin-bottom: 0.3rem;
 }
 .feature-name {
-    font-size: 0.83rem; font-weight: 700;
-    color: #1E293B; margin: 0 0 1px;
+    font-size: 0.8rem; font-weight: 700;
+    color: #1E293B; margin: 0;
+    line-height: 1.3;
 }
 .feature-desc {
-    font-size: 0.72rem; color: #64748B; margin: 0 0 2px;
+    font-size: 0.67rem; color: #94A3B8; margin: 0;
+    line-height: 1.2;
 }
 .feature-ref {
-    font-size: 0.68rem; color: #0D9488;
+    font-size: 0.65rem; color: #0D9488;
     font-weight: 500; margin: 0;
+    line-height: 1.2;
 }
-.feature-card .stSlider { margin-top: 4px !important; }
+.feature-card .stSlider { margin-top: 2px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1728,29 +1741,29 @@ def main():
         )
 
         st.markdown('<div style="height:1rem"></div>', unsafe_allow_html=True)
+
+        # Card de resumo compacto
+        n_models = len(sd['models'])
         st.markdown(
             f'<div class="sidebar-meta">'
-            f'<p style="color:#94A3B8 !important;font-size:0.72rem;margin:0 0 4px">DATASET</p>'
-            f'<p style="color:#CBD5E1 !important;font-weight:600;margin:0">Pima Indians</p>'
-            f'<p style="margin:2px 0">768 pacientes | 8 variaveis</p>'
-            f'<p style="margin:0">34.9% diabeticos</p>'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+            f'  <span style="color:#94A3B8;font-size:0.68rem;letter-spacing:0.1em">SISTEMA</span>'
+            f'  <span style="background:#0D9488;color:white;font-size:0.65rem;font-weight:700;'
+            f'    padding:2px 7px;border-radius:10px">{n_models} modelos</span>'
+            f'</div>'
+            f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">'
+            f'  <div style="background:rgba(255,255,255,0.05);border-radius:6px;padding:7px 9px">'
+            f'    <p style="color:#64748B;font-size:0.65rem;margin:0">Melhor AUC</p>'
+            f'    <p style="color:#0D9488;font-weight:800;font-size:1rem;margin:0">{best_auc:.3f}</p>'
+            f'    <p style="color:#8DA2BC;font-size:0.68rem;margin:0">{best_name}</p>'
+            f'  </div>'
+            f'  <div style="background:rgba(255,255,255,0.05);border-radius:6px;padding:7px 9px">'
+            f'    <p style="color:#64748B;font-size:0.65rem;margin:0">Dataset</p>'
+            f'    <p style="color:#CBD5E1;font-weight:700;font-size:0.85rem;margin:0">768</p>'
+            f'    <p style="color:#8DA2BC;font-size:0.68rem;margin:0">34.9% positivos</p>'
+            f'  </div>'
+            f'</div>'
             f'</div>',
-            unsafe_allow_html=True)
-        st.markdown(
-            f'<div class="sidebar-meta">'
-            f'<p style="color:#94A3B8 !important;font-size:0.72rem;margin:0 0 4px">MELHOR MODELO</p>'
-            f'<p style="color:#CBD5E1 !important;font-weight:600;margin:0">{best_name}</p>'
-            f'<p style="margin:2px 0">AUC: {best_auc:.4f}</p>'
-            f'</div>',
-            unsafe_allow_html=True)
-        st.markdown(
-            '<div class="sidebar-meta">'
-            '<p style="color:#94A3B8 !important;font-size:0.72rem;margin:0 0 4px">ALGORITMOS</p>'
-            + "".join(
-                f'<p style="margin:2px 0;color:#8DA2BC !important">{n}</p>'
-                for n in sd['models']
-            )
-            + '</div>',
             unsafe_allow_html=True)
 
         st.markdown('<div style="height:0.5rem"></div>', unsafe_allow_html=True)
