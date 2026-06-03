@@ -474,6 +474,70 @@ def shap_chart(shap_values: np.ndarray, feature_names: list) -> go.Figure:
     return fig
 
 
+def pr_chart(results: dict) -> go.Figure:
+    fig = go.Figure()
+    palette = [COLORS['teal'], COLORS['blue'], COLORS['amber'], COLORS['red'], '#8B5CF6']
+    # Baseline (prevalencia)
+    pos_rate = 268 / 768
+    fig.add_trace(go.Scatter(
+        x=[0, 1], y=[pos_rate, pos_rate], mode='lines',
+        line=dict(dash='dash', color='#CBD5E1', width=1.5),
+        name=f'Baseline ({pos_rate:.2f})', showlegend=True,
+    ))
+    for i, (name, data) in enumerate(results.items()):
+        prec, rec = data['pr_curve']
+        auc = data['metrics']['PR-AUC']
+        fig.add_trace(go.Scatter(
+            x=rec, y=prec, mode='lines',
+            name=f"{name} (AP={auc:.3f})",
+            line=dict(width=2.5, color=palette[i % len(palette)]),
+            hovertemplate='Recall: %{x:.3f}<br>Precisao: %{y:.3f}<extra></extra>',
+        ))
+    fig.update_layout(
+        **PLOT_TEMPLATE, height=420,
+        xaxis=dict(title='Recall (Sensibilidade)', range=[0, 1],
+                   gridcolor='#F3F4F6', linecolor='#E2E8F0'),
+        yaxis=dict(title='Precisao', range=[0, 1.02],
+                   gridcolor='#F3F4F6', linecolor='#E2E8F0'),
+        legend=dict(x=0.01, y=0.05, bgcolor='rgba(255,255,255,0.9)',
+                    bordercolor='#E2E8F0', borderwidth=1, font=dict(size=11)),
+        margin=dict(l=20, r=20, t=20, b=20),
+    )
+    return fig
+
+
+def calibration_chart(results: dict) -> go.Figure:
+    fig = go.Figure()
+    palette = [COLORS['teal'], COLORS['blue'], COLORS['amber'], COLORS['red'], '#8B5CF6']
+    fig.add_trace(go.Scatter(
+        x=[0, 1], y=[0, 1], mode='lines',
+        line=dict(dash='dash', color='#CBD5E1', width=1.5),
+        name='Calibracao perfeita', showlegend=True,
+    ))
+    for i, (name, data) in enumerate(results.items()):
+        mean_pred, frac_pos = data['calibration']
+        if len(mean_pred) == 0:
+            continue
+        fig.add_trace(go.Scatter(
+            x=mean_pred, y=frac_pos, mode='lines+markers',
+            name=name,
+            line=dict(width=2.5, color=palette[i % len(palette)]),
+            marker=dict(size=8),
+            hovertemplate='Prob. prevista: %{x:.3f}<br>Frac. positivos: %{y:.3f}<extra></extra>',
+        ))
+    fig.update_layout(
+        **PLOT_TEMPLATE, height=420,
+        xaxis=dict(title='Probabilidade media prevista', range=[0, 1],
+                   gridcolor='#F3F4F6', linecolor='#E2E8F0'),
+        yaxis=dict(title='Fracao de positivos reais', range=[0, 1.02],
+                   gridcolor='#F3F4F6', linecolor='#E2E8F0'),
+        legend=dict(x=0.01, y=0.95, bgcolor='rgba(255,255,255,0.9)',
+                    bordercolor='#E2E8F0', borderwidth=1, font=dict(size=11)),
+        margin=dict(l=20, r=20, t=20, b=20),
+    )
+    return fig
+
+
 def roc_chart(results: dict) -> go.Figure:
     fig = go.Figure()
     palette = [COLORS['teal'], COLORS['blue'], COLORS['amber'], COLORS['red'], '#8B5CF6']
@@ -713,7 +777,12 @@ def page_dashboard(sd: dict):
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown('<p class="section-title">Tabela de Desempenho Completa</p>', unsafe_allow_html=True)
     metric_keys = ['Acuracia', 'Precisao', 'Recall', 'F1-Score', 'ROC-AUC', 'PR-AUC']
-    header = "<thead><tr><th>Modelo</th>" + "".join(f"<th>{k}</th>" for k in metric_keys) + "</tr></thead>"
+    cv = sd.get('cv_results', {})
+    header = (
+        "<thead><tr><th>Modelo</th>"
+        + "".join(f"<th>{k}</th>" for k in metric_keys)
+        + "<th>AUC-CV (media ± dp)</th></tr></thead>"
+    )
     rows = ""
     for name, data in results.items():
         m = data['metrics']
@@ -723,11 +792,17 @@ def page_dashboard(sd: dict):
             best_v = max(results[n]['metrics'][k] for n in results)
             cls = ' class="best"' if abs(v - best_v) < 1e-6 else ''
             cells.append(f'<td{cls}>{v:.4f}</td>')
+        cv_cell = (
+            f"{cv[name]['auc_mean']:.4f} ± {cv[name]['auc_std']:.4f}"
+            if name in cv else "—"
+        )
         star = " *" if name == best_name else ""
-        rows += f"<tr><td><b>{name}{star}</b></td>{''.join(cells)}</tr>"
+        rows += f"<tr><td><b>{name}{star}</b></td>{''.join(cells)}<td>{cv_cell}</td></tr>"
     st.markdown(
         f'<table class="metrics-table"><{header}<tbody>{rows}</tbody></table>'
-        '<p style="font-size:0.75rem;color:#94A3B8;margin-top:8px">* Melhor modelo por ROC-AUC | Valores em negrito: melhor da coluna</p>',
+        '<p style="font-size:0.75rem;color:#94A3B8;margin-top:8px">'
+        '* Melhor modelo por ROC-AUC | Negrito: melhor da coluna | '
+        'AUC-CV: validacao cruzada 5-Fold (media ± desvio padrao)</p>',
         unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -735,55 +810,67 @@ def page_dashboard(sd: dict):
 def page_prediction(sd: dict):
     from src.evaluate import predict_proba, compute_shap_values
 
-    models = sd['models']
-    scaler = sd['scaler']
+    models  = sd['models']
+    scaler  = sd['scaler']
     X_train = sd['X_train']
     df_clean = sd['df_clean']
-    results = sd['results']
+    results  = sd['results']
+    best_name = max(results, key=lambda n: results[n]['metrics']['ROC-AUC'])
 
     st.markdown('<p class="page-title">Avaliacao de Risco Clinico</p>', unsafe_allow_html=True)
     st.markdown('<p class="page-subtitle">Insira os dados do paciente para calcular a probabilidade de diabetes tipo 2</p>',
                 unsafe_allow_html=True)
-
     st.markdown(
-        '<div class="box-warning">Este sistema e um prototipo academico. '
-        'Nao substitui avaliacao medica profissional. '
-        'O resultado deve ser interpretado por um profissional de saude.</div>',
+        '<div class="box-warning">Prototipo academico — nao substitui avaliacao medica profissional.</div>',
         unsafe_allow_html=True)
 
-    best_name = max(results, key=lambda n: results[n]['metrics']['ROC-AUC'])
-
-    form_col, result_col = st.columns([1, 1], gap="large")
-
-    with form_col:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<p class="section-title">Dados do Paciente</p>', unsafe_allow_html=True)
-
+    # ── Controles globais ─────────────────────────────────────────────────────
+    ctrl1, ctrl2, ctrl3 = st.columns([2, 2, 1])
+    with ctrl1:
         model_name = st.selectbox(
             "Modelo de predicao",
             options=list(models.keys()),
             index=list(models.keys()).index(best_name) if best_name in models else 0,
             help="Selecione o algoritmo para calcular o risco",
         )
+    with ctrl2:
+        threshold = st.slider(
+            "Limiar de classificacao",
+            min_value=0.10, max_value=0.90, value=0.50, step=0.05,
+            help="Abaixar o limiar aumenta a sensibilidade (detecta mais casos) "
+                 "mas tambem aumenta falsos positivos. Padrao clinico: 0.50",
+        )
+    with ctrl3:
+        st.markdown(
+            f'<div style="margin-top:1.8rem;padding:8px 12px;background:#F8FAFC;'
+            f'border:1px solid #E2E8F0;border-radius:8px;text-align:center">'
+            f'<p style="font-size:0.7rem;color:#64748B;margin:0">Limiar ativo</p>'
+            f'<p style="font-size:1.3rem;font-weight:800;color:#0D9488;margin:0">{threshold:.0%}</p>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
-        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:0.5rem"></div>', unsafe_allow_html=True)
+
+    # ── Abas: Individual | Lote ───────────────────────────────────────────────
+    tab_ind, tab_lote = st.tabs(["Paciente Individual", "Predicao em Lote (CSV)"])
+
+    # ── Aba Individual ────────────────────────────────────────────────────────
+    with tab_ind:
+        form_col, result_col = st.columns([1, 1], gap="large")
 
         patient_values = {}
-        left_features = ['Pregnancies', 'BloodPressure', 'SkinThickness', 'DiabetesPedigreeFunction']
-        right_features = ['Glucose', 'Insulin', 'BMI', 'Age']
 
         def render_feature_slider(feat):
             mn, mx, default, step = FEATURE_RANGES[feat]
-            lab   = FEATURE_LABELS[feat]
-            unit  = FEATURE_UNITS[feat]
-            desc  = FEATURE_DESCRIPTIONS[feat]
-            ref   = FEATURE_REFERENCES[feat]
+            lab      = FEATURE_LABELS[feat]
+            unit     = FEATURE_UNITS[feat]
             unit_txt = f" ({unit})" if unit else ""
             st.markdown(
                 f'<div class="feature-card">'
                 f'<p class="feature-name">{lab}{unit_txt}</p>'
-                f'<p class="feature-desc">{desc}</p>'
-                f'<p class="feature-ref">{ref}</p>'
+                f'<p class="feature-desc">{FEATURE_DESCRIPTIONS[feat]}</p>'
+                f'<p class="feature-ref">{FEATURE_REFERENCES[feat]}</p>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -795,105 +882,191 @@ def page_prediction(sd: dict):
                 label_visibility="collapsed",
             )
 
-        fc1, fc2 = st.columns(2)
-        with fc1:
-            for feat in left_features:
-                patient_values[feat] = render_feature_slider(feat)
-        with fc2:
-            for feat in right_features:
-                patient_values[feat] = render_feature_slider(feat)
+        with form_col:
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.markdown('<p class="section-title">Dados do Paciente</p>', unsafe_allow_html=True)
+            fc1, fc2 = st.columns(2)
+            left_features  = ['Pregnancies', 'BloodPressure', 'SkinThickness', 'DiabetesPedigreeFunction']
+            right_features = ['Glucose', 'Insulin', 'BMI', 'Age']
+            with fc1:
+                for feat in left_features:
+                    patient_values[feat] = render_feature_slider(feat)
+            with fc2:
+                for feat in right_features:
+                    patient_values[feat] = render_feature_slider(feat)
+            st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown('<div style="height:0.5rem"></div>', unsafe_allow_html=True)
-        calculate = st.button("Calcular Risco")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    with result_col:
-        if calculate or True:
-            patient_array = np.array([[patient_values[f] for f in FEATURE_NAMES]])
+        with result_col:
+            patient_array  = np.array([[patient_values[f] for f in FEATURE_NAMES]])
             patient_scaled = scaler.transform(patient_array)
             model = models[model_name]
-            prob = float(predict_proba(model, patient_scaled)[0])
+            prob  = float(predict_proba(model, patient_scaled)[0])
+            classified_positive = prob >= threshold
 
             if prob < 0.30:
-                risk_level = "Baixo"
-                badge_cls = "badge-baixo"
+                risk_level, badge_cls = "Baixo",    "badge-baixo"
                 advice = "Perfil de risco dentro da faixa normal. Mantenha habitos saudaveis e realize exames periodicos."
             elif prob < 0.60:
-                risk_level = "Moderado"
-                badge_cls = "badge-moderado"
+                risk_level, badge_cls = "Moderado", "badge-moderado"
                 advice = "Risco moderado identificado. Recomenda-se avaliacao medica e revisao de habitos alimentares."
             else:
-                risk_level = "Alto"
-                badge_cls = "badge-alto"
+                risk_level, badge_cls = "Alto",     "badge-alto"
                 advice = "Risco elevado detectado. Encaminhamento medico urgente recomendado para avaliacao completa."
 
+            decision_color = '#EF4444' if classified_positive else '#10B981'
+            decision_label = 'POSITIVO' if classified_positive else 'NEGATIVO'
+
             st.markdown('<div class="card" style="text-align:center">', unsafe_allow_html=True)
-            st.plotly_chart(risk_gauge(prob), use_container_width=True, config={'displayModeBar': False})
+            try:
+                st.plotly_chart(risk_gauge(prob), use_container_width=True, config={'displayModeBar': False})
+            except Exception:
+                pass
             st.markdown(
-                f'<p style="text-align:center;margin:4px 0 8px">'
-                f'<span class="badge {badge_cls}">Risco {risk_level}</span></p>',
-                unsafe_allow_html=True)
-            st.markdown(
-                f'<p style="font-size:0.83rem;color:#475569;text-align:center;margin-top:8px">{advice}</p>',
+                f'<p style="text-align:center;margin:4px 0 4px">'
+                f'<span class="badge {badge_cls}">Risco {risk_level}</span></p>'
+                f'<p style="font-size:0.78rem;color:#94A3B8;margin:4px 0 2px">'
+                f'Com limiar de {threshold:.0%}:</p>'
+                f'<p style="font-size:1.1rem;font-weight:800;color:{decision_color};margin:0 0 8px">'
+                f'{decision_label}</p>'
+                f'<p style="font-size:0.83rem;color:#475569;text-align:center;margin-top:4px">{advice}</p>',
                 unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-    if calculate or True:
+        # ── SHAP + Radar ──────────────────────────────────────────────────────
         st.markdown('<div style="height:0.5rem"></div>', unsafe_allow_html=True)
-
         shap_col, radar_col = st.columns([1, 1], gap="large")
 
         with shap_col:
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.markdown('<p class="section-title">Fatores Determinantes (SHAP)</p>', unsafe_allow_html=True)
-            st.markdown(
-                '<p style="font-size:0.8rem;color:#64748B;margin-bottom:8px">'
-                'Contribuicao de cada variavel para a predicao deste paciente</p>',
-                unsafe_allow_html=True)
-            try:
-                shap_vals = compute_shap_values(model, model_name, X_train, patient_scaled)
-                if shap_vals is not None:
-                    st.plotly_chart(
-                        shap_chart(shap_vals, FEATURE_NAMES),
-                        use_container_width=True,
-                        config={'displayModeBar': False},
-                    )
-                else:
-                    st.markdown(
-                        '<div class="box-warning">'
-                        '<strong>SHAP indisponivel para este modelo.</strong><br>'
-                        'Selecione <em>Random Forest</em> ou <em>Gradient Boosting</em> '
-                        'para ver a explicacao da predicao.'
-                        '</div>',
-                        unsafe_allow_html=True,
-                    )
-            except Exception:
+            st.markdown('<p style="font-size:0.8rem;color:#64748B;margin-bottom:8px">'
+                        'Contribuicao de cada variavel para a predicao deste paciente</p>',
+                        unsafe_allow_html=True)
+            shap_vals = compute_shap_values(model, model_name, X_train, patient_scaled)
+            if shap_vals is not None:
+                try:
+                    st.plotly_chart(shap_chart(shap_vals, FEATURE_NAMES),
+                                    use_container_width=True, config={'displayModeBar': False})
+                except Exception as exc:
+                    st.markdown(f'<div class="box-warning">Erro ao gerar SHAP: {exc}</div>', unsafe_allow_html=True)
+            else:
                 st.markdown(
-                    '<div class="box-warning">'
-                    '<strong>Explicabilidade SHAP indisponivel.</strong><br>'
-                    'Verifique se o pacote <code>shap</code> esta instalado e reinicie o app.'
-                    '</div>',
-                    unsafe_allow_html=True,
-                )
+                    '<div class="box-warning"><strong>SHAP indisponivel para este modelo.</strong><br>'
+                    'Selecione <em>Random Forest</em> ou <em>Gradient Boosting</em>.</div>',
+                    unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         with radar_col:
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.markdown('<p class="section-title">Comparacao com a Populacao</p>', unsafe_allow_html=True)
-            st.markdown(
-                '<p style="font-size:0.8rem;color:#64748B;margin-bottom:8px">'
-                'Perfil do paciente versus medias populacionais (valores normalizados)</p>',
-                unsafe_allow_html=True)
-            patient_vals_list = [patient_values[f] for f in FEATURE_NAMES]
+            st.markdown('<p style="font-size:0.8rem;color:#64748B;margin-bottom:8px">'
+                        'Perfil do paciente versus medias populacionais (valores normalizados)</p>',
+                        unsafe_allow_html=True)
             try:
                 st.plotly_chart(
-                    population_comparison_chart(patient_vals_list, df_clean),
-                    use_container_width=True,
-                    config={'displayModeBar': False},
-                )
+                    population_comparison_chart([patient_values[f] for f in FEATURE_NAMES], df_clean),
+                    use_container_width=True, config={'displayModeBar': False})
             except Exception as exc:
-                st.markdown(f'<div class="box-warning">Erro ao gerar grafico radar: {exc}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="box-warning">Erro: {exc}</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── Aba Lote ──────────────────────────────────────────────────────────────
+    with tab_lote:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown('<p class="section-title">Predicao em Lote</p>', unsafe_allow_html=True)
+        st.markdown(
+            '<p style="font-size:0.82rem;color:#64748B;margin-bottom:12px">'
+            'Faca upload de um arquivo CSV com as colunas: '
+            '<code>Pregnancies, Glucose, BloodPressure, SkinThickness, Insulin, BMI, '
+            'DiabetesPedigreeFunction, Age</code></p>',
+            unsafe_allow_html=True)
+
+        uploaded = st.file_uploader("Upload CSV", type=["csv"], label_visibility="collapsed")
+
+        if uploaded is not None:
+            try:
+                df_upload = pd.read_csv(uploaded)
+                missing = [c for c in FEATURE_NAMES if c not in df_upload.columns]
+                if missing:
+                    st.markdown(
+                        f'<div class="box-warning">Colunas ausentes no CSV: '
+                        f'<strong>{", ".join(missing)}</strong></div>',
+                        unsafe_allow_html=True)
+                else:
+                    X_batch = df_upload[FEATURE_NAMES].fillna(df_upload[FEATURE_NAMES].median())
+                    X_batch_scaled = scaler.transform(X_batch.values)
+                    batch_model = models[model_name]
+                    probas = predict_proba(batch_model, X_batch_scaled)
+                    preds  = (probas >= threshold).astype(int)
+
+                    df_result = df_upload[FEATURE_NAMES].copy()
+                    df_result['Prob_Diabetes (%)'] = (probas * 100).round(1)
+                    df_result['Classificacao']     = np.where(preds == 1, 'POSITIVO', 'NEGATIVO')
+                    df_result['Risco']             = pd.cut(
+                        probas,
+                        bins=[0, 0.3, 0.6, 1.0],
+                        labels=['Baixo', 'Moderado', 'Alto'],
+                    )
+
+                    n_pos = int(preds.sum())
+                    n_neg = len(preds) - n_pos
+                    b1, b2, b3 = st.columns(3)
+                    with b1:
+                        st.markdown(f'<div class="kpi-card blue" style="padding:0.8rem 1rem">'
+                                    f'<div class="kpi-value" style="font-size:1.4rem">{len(preds)}</div>'
+                                    f'<div class="kpi-label">Total de pacientes</div></div>',
+                                    unsafe_allow_html=True)
+                    with b2:
+                        st.markdown(f'<div class="kpi-card red" style="padding:0.8rem 1rem">'
+                                    f'<div class="kpi-value" style="font-size:1.4rem">{n_pos}</div>'
+                                    f'<div class="kpi-label">Classificados positivos</div>'
+                                    f'<div class="kpi-sub">{n_pos/len(preds)*100:.1f}%</div></div>',
+                                    unsafe_allow_html=True)
+                    with b3:
+                        st.markdown(f'<div class="kpi-card green" style="padding:0.8rem 1rem">'
+                                    f'<div class="kpi-value" style="font-size:1.4rem">{n_neg}</div>'
+                                    f'<div class="kpi-label">Classificados negativos</div>'
+                                    f'<div class="kpi-sub">{n_neg/len(preds)*100:.1f}%</div></div>',
+                                    unsafe_allow_html=True)
+
+                    st.markdown('<div style="height:0.75rem"></div>', unsafe_allow_html=True)
+                    st.dataframe(
+                        df_result.style.apply(
+                            lambda col: ['background:#FEE2E2;color:#991B1B' if v == 'POSITIVO'
+                                         else 'background:#D1FAE5;color:#065F46'
+                                         for v in col]
+                            if col.name == 'Classificacao' else ['' for _ in col],
+                            axis=0,
+                        ),
+                        use_container_width=True,
+                        height=min(400, 40 + len(df_result) * 36),
+                    )
+
+                    csv_bytes = df_result.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="Baixar resultados (.csv)",
+                        data=csv_bytes,
+                        file_name="pimagard_resultados.csv",
+                        mime="text/csv",
+                    )
+
+            except Exception as exc:
+                st.markdown(f'<div class="box-warning">Erro ao processar CSV: <strong>{exc}</strong></div>',
+                            unsafe_allow_html=True)
+        else:
+            st.markdown(
+                '<div class="box-info">Arraste um arquivo CSV aqui ou clique para selecionar. '
+                'O arquivo deve ter as 8 variaveis do modelo nas colunas.</div>',
+                unsafe_allow_html=True)
+            # Botão para baixar template
+            template_df = pd.DataFrame([{f: FEATURE_RANGES[f][2] for f in FEATURE_NAMES}])
+            st.download_button(
+                label="Baixar template CSV",
+                data=template_df.to_csv(index=False).encode('utf-8'),
+                file_name="template_pimagard.csv",
+                mime="text/csv",
+            )
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
 def page_eda(sd: dict):
@@ -1108,8 +1281,9 @@ def page_models(sd: dict):
     st.markdown('<p class="page-subtitle">Desempenho, curvas ROC, matrizes de confusao e validacao cruzada</p>',
                 unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "Curvas ROC", "Matrizes de Confusao", "Validacao Cruzada", "Analise de Desempenho"
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "Curvas ROC", "Precisao-Recall", "Calibracao",
+        "Matrizes de Confusao", "Validacao Cruzada", "Analise de Desempenho"
     ])
 
     with tab1:
@@ -1125,6 +1299,32 @@ def page_models(sd: dict):
         st.markdown('</div>', unsafe_allow_html=True)
 
     with tab2:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        try:
+            st.plotly_chart(pr_chart(results), use_container_width=True, config={'displayModeBar': False})
+        except Exception as exc:
+            st.markdown(f'<div class="box-warning">Erro: {exc}</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="box-info">A curva Precisao-Recall e mais informativa que a ROC em datasets '
+            'desbalanceados. AP (Average Precision) resume a area sob a curva. '
+            'A linha tracejada representa o classificador aleatorio (prevalencia do dataset: 34.9%).</div>',
+            unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with tab3:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        try:
+            st.plotly_chart(calibration_chart(results), use_container_width=True, config={'displayModeBar': False})
+        except Exception as exc:
+            st.markdown(f'<div class="box-warning">Erro: {exc}</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="box-info">Um modelo bem calibrado deve ter sua curva proxima da diagonal. '
+            'Curvas acima da diagonal indicam subestimacao; abaixo, superestimacao das probabilidades. '
+            'Calibracao e essencial para uso clinico real das probabilidades previstas.</div>',
+            unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with tab4:
         model_names = list(results.keys())
         cols = st.columns(min(2, len(model_names)))
         for i, name in enumerate(model_names):
@@ -1154,7 +1354,7 @@ def page_models(sd: dict):
                                 f'<div class="kpi-label">Especificidade</div></div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
-    with tab3:
+    with tab5:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         if cv_results:
             try:
@@ -1194,7 +1394,7 @@ def page_models(sd: dict):
             st.markdown('<div class="box-warning">Resultados de validacao cruzada nao disponiveis.</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    with tab4:
+    with tab6:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         try:
             st.plotly_chart(metrics_comparison_chart(results), use_container_width=True,
