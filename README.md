@@ -16,8 +16,7 @@ O projeto foi desenvolvido como trabalho pratico da disciplina **Inteligencia Ar
 
 Acesse a aplicacao em producao:
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://pimagard.streamlit.app)
-
+https://pimaguard.streamlit.app/
 ---
 
 ## Funcionalidades
